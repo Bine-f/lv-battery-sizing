@@ -16,11 +16,7 @@ class DataLoader:
     Voltages are in V, active power in kW and reactive power in kvar. Files may be gzipped (.csv.gz).
     """
 
-    def __init__(self,
-                 trafo_name=None,
-                 data_dir=None,
-                 start=None,
-                 end=None):
+    def __init__(self, trafo_name=None, data_dir=None, start=None, end=None):
         self.data_dir = config.DATA_DIR if data_dir is None else data_dir
         self.trafo_name = trafo_name
         self.voltage_data = None
@@ -30,8 +26,7 @@ class DataLoader:
 
     def _file_path(self, file_name, trafo_name=None):
         """Returns path to file_name in the trafo folder, gzipped files (.csv.gz) are also accepted"""
-        path = os.path.join(self.data_dir, trafo_name or self.trafo_name,
-                            file_name)
+        path = os.path.join(self.data_dir, trafo_name or self.trafo_name, file_name)
         if not os.path.isfile(path) and os.path.isfile(path + ".gz"):
             path += ".gz"
         return path
@@ -63,8 +58,10 @@ class DataLoader:
     def list_trafos(self):
         """Returns names of all transformers with voltage data in data_dir"""
         return sorted(
-            name for name in os.listdir(self.data_dir)
-            if os.path.isfile(self._file_path(config.VOLTAGE_FILE, name)))
+            name
+            for name in os.listdir(self.data_dir)
+            if os.path.isfile(self._file_path(config.VOLTAGE_FILE, name))
+        )
 
     def find_trafo_candidates(self, min_events=4):
         """Creates a list of trafos that have undervoltages, and could be suitable for battery installation.
@@ -83,8 +80,7 @@ class DataLoader:
             low_times = pd.Index(df.loc[low, "date_time"].unique())
             # an event counts if there is another undervoltage in the network 10 minutes before or after
             step = pd.Timedelta("10min")
-            consecutive = (events + step).isin(low_times) | (
-                events - step).isin(low_times)
+            consecutive = (events + step).isin(low_times) | (events - step).isin(low_times)
             n_events = int(consecutive.sum())
             if n_events >= min_events:
                 candidates.append((trafo_name, n_events))

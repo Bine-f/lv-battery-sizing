@@ -1,10 +1,10 @@
 import pandas as pd
 
 from data_loader import DataLoader
-from preprocess import Preprocess
-from models.trafo_model import TrafoModel
-from models.feeder_model import FeederModel
 from models.battery_model import BatteryModel
+from models.feeder_model import FeederModel
+from models.trafo_model import TrafoModel
+from preprocess import Preprocess
 
 
 def process_trafo(trafo_name, network_path, data_dir=None, all_feeders=False):
@@ -29,15 +29,17 @@ def process_trafo(trafo_name, network_path, data_dir=None, all_feeders=False):
     dl = DataLoader(trafo_name=trafo_name, data_dir=data_dir)
     voltage_data = dl.load_voltage_data()
     pr = Preprocess(voltage_data)
-    voltage_data, undervoltage_data, trafo_suitable_for_battery = pr.preprocess_voltage_data_get_undervoltages()
+    voltage_data, undervoltage_data, trafo_suitable_for_battery = (
+        pr.preprocess_voltage_data_get_undervoltages()
+    )
 
     if trafo_suitable_for_battery:
         # There are undervoltages, we need to fix
         power_data = dl.load_power_data()
-        df_vol, df_p, df_q = pr.preprocess_powers_create_pivot_tables(
-            power_data)
-        tm = TrafoModel(voltage_data, undervoltage_data, df_vol, df_p, df_q,
-                        trafo_name, network_path)
+        df_vol, df_p, df_q = pr.preprocess_powers_create_pivot_tables(power_data)
+        tm = TrafoModel(
+            voltage_data, undervoltage_data, df_vol, df_p, df_q, trafo_name, network_path
+        )
         tm.create_and_populate_snet()
         for feeder in tm.feeders:
             fm = FeederModel(tm, feeder)
@@ -47,8 +49,7 @@ def process_trafo(trafo_name, network_path, data_dir=None, all_feeders=False):
                 bm.calculate_battery_parameters()
                 res = pd.concat([res, fm.feeder_res], ignore_index=True)
     elif all_feeders:
-        tm = TrafoModel(voltage_data, undervoltage_data, None, None, None,
-                        trafo_name, network_path)
+        tm = TrafoModel(voltage_data, undervoltage_data, None, None, None, trafo_name, network_path)
         tm.create_and_populate_snet()
         for feeder in tm.feeders:
             fm = FeederModel(tm, feeder)
@@ -63,8 +64,7 @@ def process_trafos(trafo_names, network_path, data_dir=None, all_feeders=False):
     for trafo_name in trafo_names:
         print(trafo_name)
         try:
-            trafo_res = process_trafo(trafo_name, network_path, data_dir,
-                                      all_feeders)
+            trafo_res = process_trafo(trafo_name, network_path, data_dir, all_feeders)
             res = pd.concat([res, trafo_res], ignore_index=True)
         except Exception as e:
             print(f"Error processing transformer {trafo_name}: {e}")

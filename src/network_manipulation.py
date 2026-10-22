@@ -1,11 +1,11 @@
-import networkx as nx
 import numpy as np
 import pandapower as pp
 
 
 def create_network(json_path):
-	net = pp.from_json(json_path)
-	return net
+    net = pp.from_json(json_path)
+    return net
+
 
 def set_volts(snet, state_vol, warn=True, sort=True):
     """Creates a dataframe with measured voltage data from state_vol and powerflow results from snet
@@ -19,29 +19,29 @@ def set_volts(snet, state_vol, warn=True, sort=True):
             if True, prints warnings if some data is missing
         sort: bool
             if True, sorts the dataframe by real voltage"""
-    volts = snet.load[['bus', 'p_mw', "q_mvar", "smm", "name"]]
+    volts = snet.load[["bus", "p_mw", "q_mvar", "smm", "name"]]
     volts["vol_pp"] = 0
     volts["vol_real"] = 0
     for row in snet.load.itertuples():
         bus = row.bus
         vol_pp = snet.res_bus.loc[bus]
-        volts.loc[volts.bus == bus, 'vol_pp'] = vol_pp.vm_pu
+        volts.loc[volts.bus == bus, "vol_pp"] = vol_pp.vm_pu
         smm = row.smm
         try:
-            volts.loc[volts.smm == smm, 'vol_real'] = float(state_vol[smm])/230
+            volts.loc[volts.smm == smm, "vol_real"] = float(state_vol[smm]) / 230
 
         except:
             # delete row from volts
             # volts = volts[volts.smm != smm]
-            volts.loc[volts.smm == smm, 'vol_real'] = np.nan
+            volts.loc[volts.smm == smm, "vol_real"] = np.nan
             if warn:
                 print("Missing measured voltage for smm: ", smm)
     if sort:
-        volts.sort_values(by=['vol_real'], ascending=True, inplace=True)
+        volts.sort_values(by=["vol_real"], ascending=True, inplace=True)
     return volts
 
 
-def run_powerflow(snet, res_factor=1., trafo_lv=0.4):
+def run_powerflow(snet, res_factor=1.0, trafo_lv=0.4):
     """Runs powerflow on snet with adjusted resistance factor and transformer voltage
     Makes sure that the original values are restored in case of an error
     Args:
@@ -54,24 +54,23 @@ def run_powerflow(snet, res_factor=1., trafo_lv=0.4):
             transformer voltage
     """
     if not np.isfinite(res_factor) or not np.isfinite(trafo_lv):
-       
         raise Exception("res_factor or trafo_lv is not finite")
-    orig_lv = snet.trafo['vn_lv_kv'].copy()
+    orig_lv = snet.trafo["vn_lv_kv"].copy()
     # print("orig_lv: ", orig_lv)
-    snet.line['r_ohm_per_km'] = snet.line['r_ohm_per_km'] * res_factor
-    snet.line['x_ohm_per_km'] = snet.line['x_ohm_per_km'] * res_factor
-    snet.trafo['vn_lv_kv'] = trafo_lv
+    snet.line["r_ohm_per_km"] = snet.line["r_ohm_per_km"] * res_factor
+    snet.line["x_ohm_per_km"] = snet.line["x_ohm_per_km"] * res_factor
+    snet.trafo["vn_lv_kv"] = trafo_lv
     try:
         pp.runpp(snet, numba=False)
-        snet.trafo['vn_lv_kv'] = orig_lv
-        snet.line['r_ohm_per_km'] = snet.line['r_ohm_per_km'] / res_factor
-        snet.line['x_ohm_per_km'] = snet.line['x_ohm_per_km'] / res_factor
+        snet.trafo["vn_lv_kv"] = orig_lv
+        snet.line["r_ohm_per_km"] = snet.line["r_ohm_per_km"] / res_factor
+        snet.line["x_ohm_per_km"] = snet.line["x_ohm_per_km"] / res_factor
     except:
-        snet.trafo['vn_lv_kv'] = orig_lv
-        snet.line['r_ohm_per_km'] = snet.line['r_ohm_per_km'] / res_factor
-        snet.line['x_ohm_per_km'] = snet.line['x_ohm_per_km'] / res_factor
+        snet.trafo["vn_lv_kv"] = orig_lv
+        snet.line["r_ohm_per_km"] = snet.line["r_ohm_per_km"] / res_factor
+        snet.line["x_ohm_per_km"] = snet.line["x_ohm_per_km"] / res_factor
         raise Exception("Powerflow did not converge")
-    
+
 
 def populate_snet(snet, state_p, state_q, warn=True):
     """Populate powers in the network load based on measured powers in state_p
@@ -93,17 +92,17 @@ def populate_snet(snet, state_p, state_q, warn=True):
             p_mw = float(state_p[smm])
             if np.isnan(p_mw):
                 p_mw = 0
-            snet.load.loc[snet.load.smm == smm, 'p_mw'] = p_mw/1000
+            snet.load.loc[snet.load.smm == smm, "p_mw"] = p_mw / 1000
         except:
             if warn:
                 print("Missing active power for smm: ", smm)
-            snet.load.loc[snet.load.smm == smm, 'p_mw'] = 0
+            snet.load.loc[snet.load.smm == smm, "p_mw"] = 0
         try:
             q_mvar = float(state_q[smm])
             if np.isnan(q_mvar):
                 q_mvar = 0
-            snet.load.loc[snet.load.smm == smm, 'q_mvar'] = q_mvar/1000
+            snet.load.loc[snet.load.smm == smm, "q_mvar"] = q_mvar / 1000
         except:
             if warn:
                 print("Missing reactive power for smm: ", smm)
-            snet.load.loc[snet.load.smm == smm, 'q_mvar'] = 0
+            snet.load.loc[snet.load.smm == smm, "q_mvar"] = 0

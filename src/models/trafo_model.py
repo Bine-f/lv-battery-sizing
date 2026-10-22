@@ -1,12 +1,16 @@
-import pandas as pd
-import pandapower as pp
 import networkx as nx
-from utils import *
-from subnet_creation import Subnet
+import pandapower as pp
+import pandas as pd
+
 import config
+from subnet_creation import Subnet
+from utils import *
+
 
 class TrafoModel:
-    def __init__(self, voltage_data, undervoltage_data, df_vol, df_p, df_q,  trafo_name, network_path):
+    def __init__(
+        self, voltage_data, undervoltage_data, df_vol, df_p, df_q, trafo_name, network_path
+    ):
         self.voltage_data = voltage_data
         self.undervoltage_data = undervoltage_data
         self.df_vol = df_vol
@@ -20,7 +24,6 @@ class TrafoModel:
         if self.voltage_data is not None:
             self.enough_voltage_data = self.is_there_enough_voltage_data()
 
-    
     def create_snet(self):
         """Create pandapower network for trafo"""
         net = create_network(self.network_path)
@@ -42,8 +45,9 @@ class TrafoModel:
         # Create path from transformer to min bus
         for bus in self.snet.load.bus:
             pth = nx.shortest_path(mg, source=tr_bus, target=bus)
-            lines = self.snet.line[self.snet.line["from_bus"].isin(
-                pth) & self.snet.line["to_bus"].isin(pth)]
+            lines = self.snet.line[
+                self.snet.line["from_bus"].isin(pth) & self.snet.line["to_bus"].isin(pth)
+            ]
             # Every path from trafo to bus contains a line tagged with FEEDER_LINE_TAG, its name is the feeder name
             feeder = lines[lines.name.str.contains(config.FEEDER_LINE_TAG)].name.values[0]
             feeders.append(feeder)
@@ -62,8 +66,11 @@ class TrafoModel:
         for smm in self.snet.load.smm:
             try:
                 df_vol_smm = self.voltage_data.loc[self.voltage_data["smm"] == smm]
-                one_phase = df_vol_smm.u_2.isna().sum() > (len(df_vol_smm)//2) or df_vol_smm.u_3.isna(
-                ).sum() > (len(df_vol_smm)//2) or df_vol_smm.u_3.isna().sum() > (len(df_vol_smm)//2)
+                one_phase = (
+                    df_vol_smm.u_2.isna().sum() > (len(df_vol_smm) // 2)
+                    or df_vol_smm.u_3.isna().sum() > (len(df_vol_smm) // 2)
+                    or df_vol_smm.u_3.isna().sum() > (len(df_vol_smm) // 2)
+                )
                 if one_phase:
                     phs.append(1)
                 else:
@@ -82,11 +89,10 @@ class TrafoModel:
         """Calculates precentage of smms, for which we have voltage data"""
         smms_voltage = self.voltage_data.smm.unique()
         smms_snet = self.snet.load.smm.unique()
-        return len(smms_voltage)/len(smms_snet)
-    
+        return len(smms_voltage) / len(smms_snet)
+
     def is_there_enough_voltage_data(self):
         """Returns True if we have voltage data for more than 60% of smms"""
         if self.snet is None:
             self.create_snet()
         return self.percentage_of_voltage_data() > 0.6
-        
