@@ -1,9 +1,10 @@
+"""Plots for inspecting calibration and the network (used interactively)."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandapower.plotting as plot
 
-from network_manipulation import run_powerflow
-from utils import *
+from .network import get_bus_from_smm, run_powerflow
 
 
 def plot_volts(volts, min_bus=None, id_first=None, title=None):

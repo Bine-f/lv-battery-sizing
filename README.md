@@ -1,5 +1,7 @@
 # LV battery sizing
 
+[![CI](https://github.com/Bine-f/lv-battery-sizing/actions/workflows/ci.yml/badge.svg)](https://github.com/Bine-f/lv-battery-sizing/actions/workflows/ci.yml)
+
 Data-driven sizing and placement of batteries that fix **undervoltages in low-voltage (LV) distribution feeders**.
 
 The tool combines one year of smart meter measurements (voltages and powers, 10 min resolution) with a
@@ -12,36 +14,36 @@ and dataset, so everything runs out of the box.
 
 ## Quickstart
 
-Python 3.10+ is required (tested with Python 3.14, pandas 2.3, pandapower 3.5).
+Python 3.10+ is required (tested in CI with Python 3.11 and 3.13).
 
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate    Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[api]"
 
-python src/main.py
+lvbat
 ```
 
 Output on the demo data:
 
 ```
-Transformer candidates: ['TRAFO_A']
-     Trafo            Feeder  N_of_UV  N_of_smms  N_of_smms_with_UV  N_of_dates_with_UV  battery_smm  battery_capacity  battery_power  battery_cycles
-0  TRAFO_A  FEEDER-2 TRAFO_A       18         14                  4                   9         1022          0.987918       4.645883        2.243805
+     trafo            feeder  n_undervoltages  n_meters  n_meters_with_uv  n_uv_timestamps  battery_smm  battery_capacity_kwh  battery_power_kw  battery_cycles
+0  TRAFO_A  FEEDER-2 TRAFO_A               18        14                 4                9         1022              0.987918          4.645883        2.243805
 ```
 
 Useful options:
 
 ```bash
-python src/main.py --trafo TRAFO_A --all-feeders --out results.csv
-python src/main.py --network path/to/network.json --data-dir path/to/data
+lvbat --trafo TRAFO_A --all-feeders --out results.csv
+lvbat --network path/to/network.json --data-dir path/to/data
+lvbat --help
 ```
 
 ### REST API
 
 ```bash
-cd src
-uvicorn app:app --reload
+uvicorn lv_battery_sizing.api:app --reload
+# interactive docs: http://127.0.0.1:8000/docs
 # GET http://127.0.0.1:8000/get_results/?number_of_trafos=5&all_feeders=false
 ```
 
@@ -67,13 +69,13 @@ uvicorn app:app --reload
 
 | Column | Description |
 | --- | --- |
-| `Trafo`, `Feeder` | transformer and feeder name |
-| `N_of_UV` | number of undervoltage samples in the feeder |
-| `N_of_smms`, `N_of_smms_with_UV` | number of smart meters, and meters with undervoltages |
-| `N_of_dates_with_UV` | number of timestamps with undervoltage |
+| `trafo`, `feeder` | transformer and feeder name |
+| `n_undervoltages` | number of undervoltage samples in the feeder |
+| `n_meters`, `n_meters_with_uv` | number of smart meters, and meters with undervoltages |
+| `n_uv_timestamps` | number of timestamps with undervoltage |
 | `battery_smm` | smart meter at which the battery is placed |
-| `battery_capacity` | required capacity in kWh |
-| `battery_power` | required power in kW |
+| `battery_capacity_kwh` | required capacity in kWh |
+| `battery_power_kw` | required power in kW |
 | `battery_cycles` | number of full cycles in the analysed period |
 
 ## Using your own data
@@ -81,8 +83,8 @@ uvicorn app:app --reload
 **Network** – a pandapower network saved with `pandapower.to_json`, containing:
 
 - `trafo.name` – contains the transformer name used in the data folder,
-- `bus.aclass_id` – `"TR"` for the LV busbar of each transformer (`config.TRAFO_BUS_CLASS`),
-- `line.name` – the first line of every feeder contains `"FEEDER"` (`config.FEEDER_LINE_TAG`); its name is used as the feeder name,
+- `bus.aclass_id` – `"TR"` for the LV busbar of each transformer (`TRAFO_BUS_CLASS` in `config.py`),
+- `line.name` – the first line of every feeder contains `"FEEDER"` (`FEEDER_LINE_TAG` in `config.py`); its name is used as the feeder name,
 - `load.smm` – smart meter id of every load.
 
 **Measurements** – one folder per transformer, files can be plain `.csv` or gzipped `.csv.gz`:
@@ -109,20 +111,31 @@ python scripts/generate_demo_data.py --days 42 --seed 7
 ## Project structure
 
 ```
-src/
-├── main.py                 command line entry point
-├── app.py                  FastAPI wrapper
-├── pipeline.py             processing of one or more transformers
-├── config.py               paths and network conventions
-├── data_loader.py          CSV loading, candidate screening
-├── preprocess.py           cleaning, undervoltage detection, pivot tables
-├── slope_calculation.py    calibration and voltage sensitivities
-├── network_manipulation.py power flow helpers
-├── subnet_creation.py      extraction of a transformer area from the network
-├── utils.py, plotting.py
-└── models/                 TrafoModel, FeederModel, BatteryModel
+src/lv_battery_sizing/
+├── cli.py            command line entry point (`lvbat`)
+├── api.py            FastAPI app
+├── pipeline.py       processing of one or more transformers
+├── config.py         paths and network conventions
+├── constants.py      voltage limits and algorithm parameters
+├── data_loader.py    CSV loading, candidate screening
+├── preprocess.py     cleaning, undervoltage detection, pivot tables
+├── calibration.py    model calibration and voltage sensitivities
+├── network.py        transformer areas and power flow helpers
+├── results.py        result dataclasses
+├── plotting.py       plots for interactive inspection
+└── models/           TrafoModel, FeederModel, BatteryModel
 scripts/generate_demo_data.py
-data/demo/                  synthetic network and measurements
+data/demo/            synthetic network and measurements
+tests/
+```
+
+## Development
+
+```bash
+pip install -e ".[api,dev]"
+pre-commit install      # runs ruff on every commit
+pytest                  # unit tests and an end-to-end test on the demo data
+ruff check . && ruff format --check .
 ```
 
 ## License

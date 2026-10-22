@@ -1,15 +1,19 @@
-import warnings
+"""Calibration of the network model to measurements and calculation of voltage sensitivities."""
+
+import logging
 
 import networkx as nx
 import numpy as np
-import pandapower as pp
+import pandapower.topology as top
 import pandas as pd
 import scipy.optimize as opt
 
-warnings.filterwarnings("ignore")
-import config
-from network_manipulation import populate_snet, run_powerflow, set_volts
-from plotting import plot_feeder_volts
+from . import config
+from .constants import INITIAL_TRAFO_LV_KV, N_CALIBRATION_DATES, NOMINAL_VOLTAGE
+from .network import populate_snet, run_powerflow, set_volts
+from .plotting import plot_feeder_volts
+
+logger = logging.getLogger(__name__)
 
 
 def get_opt_res_f(snet, min_bus, id_first, state_vol, x0=0.2, t0=0.4):
@@ -100,7 +104,7 @@ def is_id_suitable(id, snet, volts):
     row = volts[volts["bus"] == id]
     try:
         phases = snet.load.loc[snet.load.bus == id].phases.values[0]
-    except:
+    except Exception:
         phases = 3
     return len(row) > 0 and phases == 3
 
@@ -124,12 +128,12 @@ def find_id_first(snet, state_vol, min_bus):
     """
     id_first_found = False
     i = 0
-    run_powerflow(snet, res_factor=0.3, trafo_lv=0.425)
+    run_powerflow(snet, res_factor=0.3, trafo_lv=INITIAL_TRAFO_LV_KV)
     volts = set_volts(snet, state_vol, warn=False)
     min_bus = list(volts.bus)[0]
     tr = snet.bus[snet.bus["aclass_id"] == config.TRAFO_BUS_CLASS]
     tr_bus = tr.index[0]
-    mg = pp.topology.create_nxgraph(snet, respect_switches=True)
+    mg = top.create_nxgraph(snet, respect_switches=True)
     # Create path from transformer to min bus
     pth = nx.shortest_path(mg, source=tr_bus, target=min_bus)
     while not id_first_found:
@@ -175,7 +179,7 @@ def find_min_bus(snet, state_vol, volts):
                 return min_bus
             else:
                 tries += 1
-        except:
+        except Exception:
             tries += 1
             continue
     return None
@@ -187,7 +191,7 @@ def calculate_difference_sum(volts, smm_list):
     return (volts_feeder.vol_pp - volts_feeder.vol_real).abs().mean()
 
 
-def get_opt_res_f(snet, state_vol, smms_feeder, x0=1.0, t0=0.425):
+def get_opt_res_f(snet, state_vol, smms_feeder, x0=1.0, t0=INITIAL_TRAFO_LV_KV):
     """
     Optimizes the resistance factor to minimize the difference between real and simulated voltages for all smms in the feeder.
 
@@ -222,7 +226,7 @@ def get_opt_res_f(snet, state_vol, smms_feeder, x0=1.0, t0=0.425):
 
 
 def calibrate_snet(
-    snet, state_vol, smms_feeder, plot=False, x0=1.0, t0=0.425, calculate_res_f=True
+    snet, state_vol, smms_feeder, plot=False, x0=1.0, t0=INITIAL_TRAFO_LV_KV, calculate_res_f=True
 ):
     """
     Calculates the optimal resistance factor and transformer voltage level for the network.
@@ -258,18 +262,18 @@ def calibrate_snet(
     volts = set_volts(snet, state_vol, warn=False)
     min_bus = find_min_bus(snet, state_vol, volts)
     id_first = find_id_first(snet, state_vol, min_bus)
-    if calculate_res_f == True and len(smms_feeder) > 2:
+    if calculate_res_f and len(smms_feeder) > 2:
         try:
             # Calculate res_f using min_bus and id_first
             opt_res_f = get_opt_res_f(snet, min_bus, id_first, state_vol, x0=x0, t0=t0)
-        except:
+        except Exception:
             opt_res_f = 1.0
 
         if opt_res_f < 0.7 or opt_res_f > 1.3:
             # If we get weird results, try to calibrate res_f using all smms in feeder
             try:
                 opt_res_f = get_opt_res_f(snet, state_vol, smms_feeder, x0, t0)
-            except:
+            except Exception:
                 opt_res_f = 1.0
             if plot:
                 run_powerflow(snet, res_factor=opt_res_f, trafo_lv=t0)
@@ -286,9 +290,9 @@ def calibrate_snet(
         opt_res_f = 1.0
     try:
         opt_trafo_lv = get_opt_trafo_lv(snet, opt_res_f, min_bus, state_vol, t0)
-    except:
+    except Exception:
         opt_trafo_lv = t0
-        print("Trafo_lv optimization failed")
+        logger.warning("Transformer voltage calibration failed")
     if plot:
         run_powerflow(snet, res_factor=opt_res_f, trafo_lv=opt_trafo_lv)
         volts = set_volts(snet, state_vol, warn=False)
@@ -305,7 +309,7 @@ def calculate_slopes(
     df_q,
     df_vol,
     calibrate=True,
-    N_of_dates=4,
+    N_of_dates=N_CALIBRATION_DATES,
     plot=False,
 ):
     """
@@ -362,13 +366,13 @@ def calculate_slopes(
             if calibrate:
                 try:
                     opt_trafo_lv, res_f = calibrate_snet(
-                        snet, state_vol, smms_feeder, x0=1.0, t0=0.425, plot=plot
+                        snet, state_vol, smms_feeder, x0=1.0, t0=INITIAL_TRAFO_LV_KV, plot=plot
                     )
-                except:
-                    opt_trafo_lv = 0.425
+                except Exception:
+                    opt_trafo_lv = INITIAL_TRAFO_LV_KV
                     res_f = 1.0
             else:
-                opt_trafo_lv = 0.425
+                opt_trafo_lv = INITIAL_TRAFO_LV_KV
                 res_f = 1.0
             run_powerflow(snet, res_factor=res_f, trafo_lv=opt_trafo_lv)
             # saving initial voltages, simulated with measured power data
@@ -379,7 +383,7 @@ def calculate_slopes(
             # saving simulated voltages after power decrease
             volts_1 = set_volts(snet, state_vol, warn=False)
             # calculating difference of voltage
-            volts_diff = (volts_1["vol_pp"] - volts_0["vol_pp"]) * 230
+            volts_diff = (volts_1["vol_pp"] - volts_0["vol_pp"]) * NOMINAL_VOLTAGE
             volts_diff = volts_diff.to_frame()
             volts_diff["bus"] = volts_0["bus"]
             volts_diff["smm"] = volts_0["smm"]
@@ -390,7 +394,7 @@ def calculate_slopes(
                 try:
                     vol_slope = volts_diff[volts_diff.smm == slope_smm].vol_diff.values[0]
                     slope_df.loc[slope_df.smm == slope_smm, "slope" + str(i)] = vol_slope
-                except:
+                except Exception:
                     vol_slope = np.nan
                     slope_df.loc[slope_df.smm == slope_smm, "slope" + str(i)] = vol_slope
         # populating slopes_smms with average slopes for battery smm
