@@ -13,7 +13,9 @@ from . import config
 from .constants import (
     INITIAL_TRAFO_LV_KV,
     MAX_RES_FACTOR,
+    MAX_TRAFO_LV_KV,
     MIN_RES_FACTOR,
+    MIN_TRAFO_LV_KV,
     N_CALIBRATION_DATES,
     NOMINAL_VOLTAGE,
 )
@@ -71,7 +73,8 @@ def fit_res_factor_two_buses(
         real_first, pp_first = _measured_and_simulated(volts, id_first)
         return (real_first - real_min) - (pp_first - pp_min)
 
-    return opt.root_scalar(delta_difference, x0=x0, x1=x0 + 0.1, method="secant").root
+    sol = opt.root_scalar(delta_difference, x0=x0, x1=x0 + 0.1, method="secant")
+    return sol.root if sol.converged else np.nan
 
 
 def fit_res_factor_feeder(
@@ -108,7 +111,8 @@ def fit_trafo_lv(
         real, simulated = _measured_and_simulated(set_volts(snet, state_vol, warn=False), bus)
         return real - simulated
 
-    return opt.root_scalar(difference, method="secant", x0=t0, x1=t0 + 0.05, xtol=0.00002).root
+    sol = opt.root_scalar(difference, method="secant", x0=t0, x1=t0 + 0.05, xtol=0.00002)
+    return sol.root if sol.converged else np.nan
 
 
 def is_id_suitable(bus: int, snet: pp.pandapowerNet, volts: pd.DataFrame) -> bool:
@@ -210,7 +214,11 @@ def calibrate_snet(
     except CALIBRATION_ERRORS as e:
         logger.warning("Transformer voltage calibration failed: %s", e)
         opt_trafo_lv = t0
-    if not np.isfinite(opt_trafo_lv):
+    if not MIN_TRAFO_LV_KV <= opt_trafo_lv <= MAX_TRAFO_LV_KV:
+        # not converged (nan) or unrealistic
+        logger.warning(
+            "Unrealistic transformer voltage %.4f kV, using default %.4f kV", opt_trafo_lv, t0
+        )
         opt_trafo_lv = t0
     if plot:
         _plot_state(

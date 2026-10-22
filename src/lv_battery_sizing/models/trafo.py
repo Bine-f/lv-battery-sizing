@@ -76,7 +76,11 @@ class TrafoModel:
 
     def percentage_of_voltage_data(self) -> float:
         """Share of smms in the network for which we have voltage data"""
-        return self.voltage_data.smm.nunique() / self.snet.load.smm.nunique()
+        network_smms = self.snet.load.smm.dropna().unique()
+        if len(network_smms) == 0:
+            return 0.0
+        measured = pd.Series(network_smms).isin(self.voltage_data.smm).sum()
+        return measured / len(network_smms)
 
     def is_there_enough_voltage_data(self) -> bool:
         if self.snet is None:

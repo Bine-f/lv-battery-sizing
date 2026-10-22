@@ -62,8 +62,9 @@ class Preprocess:
         pivoted.index = pd.to_datetime(pivoted.index)
         if self.fillna_method is not None:
             pivoted = getattr(pivoted, self.fillna_method)()
-        pivoted = pivoted.resample("5min").bfill()
-        pivoted.index = pivoted.index - pd.Timedelta("5min")
+        half_interval = pd.Timedelta(MEASUREMENT_INTERVAL) / 2
+        pivoted = pivoted.resample(half_interval).bfill()
+        pivoted.index = pivoted.index - half_interval
         return pivoted.resample(MEASUREMENT_INTERVAL, label="right").mean()
 
     def create_pivot_tables(self) -> None:

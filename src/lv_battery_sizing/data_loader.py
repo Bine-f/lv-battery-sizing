@@ -45,8 +45,8 @@ class DataLoader:
             path += ".gz"
         return path
 
-    def _read_csv(self, file_name: str) -> pd.DataFrame:
-        df = pd.read_csv(self._file_path(file_name), parse_dates=["date_time"])
+    def _read_csv(self, file_name: str, trafo_name: str | None = None) -> pd.DataFrame:
+        df = pd.read_csv(self._file_path(file_name, trafo_name), parse_dates=["date_time"])
         if self.start is not None:
             df = df[df.date_time >= pd.Timestamp(self.start)]
         if self.end is not None:
@@ -85,13 +85,15 @@ class DataLoader:
         """
         candidates = []
         for trafo_name in self.list_trafos():
-            self.trafo_name = trafo_name
-            df = self.load_voltage_data()
+            df = self._read_csv(config.VOLTAGE_FILE, trafo_name)
             phases = df[["u_1", "u_2", "u_3"]]
-            # missing phases are not considered undervoltage
-            low = (phases.fillna(UNDERVOLTAGE_LIMIT + 1) < UNDERVOLTAGE_LIMIT).any(axis=1)
+            # missing phases are not considered undervoltage,
+            # limits use the same comparisons as Preprocess
+            low = (phases.fillna(UNDERVOLTAGE_LIMIT + 1) <= UNDERVOLTAGE_LIMIT).any(axis=1)
             min_u = phases.min(axis=1)
-            valid = ((phases.max(axis=1) - min_u) < MAX_PHASE_SPREAD) & (min_u > MIN_VALID_VOLTAGE)
+            valid = ((phases.max(axis=1) - min_u) <= MAX_PHASE_SPREAD) & (
+                min_u >= MIN_VALID_VOLTAGE
+            )
             events = pd.Index(df.loc[low & valid, "date_time"].unique())
             low_times = pd.Index(df.loc[low, "date_time"].unique())
             step = pd.Timedelta(MEASUREMENT_INTERVAL)
@@ -99,6 +101,5 @@ class DataLoader:
             n_events = int(consecutive.sum())
             if n_events >= min_events:
                 candidates.append((trafo_name, n_events))
-        self.trafo_name = None
         candidates.sort(key=lambda c: c[1], reverse=True)
         return [name for name, _ in candidates]

@@ -26,8 +26,11 @@ def area_of_bus(net: pp.pandapowerNet, bus: int) -> pp.pandapowerNet:
 
 
 def trafo_area(net: pp.pandapowerNet, trafo_name: str) -> pp.pandapowerNet:
-    """Returns the network supplied by the transformer whose name contains trafo_name"""
-    trafos = net.trafo.loc[net.trafo.name.str.contains(trafo_name, regex=False)]
+    """Returns the network supplied by the transformer named trafo_name. If no name matches
+    exactly, the transformer whose name contains trafo_name is used."""
+    trafos = net.trafo.loc[net.trafo.name == trafo_name]
+    if trafos.empty:
+        trafos = net.trafo.loc[net.trafo.name.str.contains(trafo_name, regex=False, na=False)]
     if len(trafos) != 1:
         raise ValueError(
             f"Expected one transformer named '{trafo_name}' in the network, found {len(trafos)}"

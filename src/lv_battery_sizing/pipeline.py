@@ -50,15 +50,20 @@ def process_trafo(
 
     results = []
     for feeder in tm.feeders:
-        fm = FeederModel(tm, feeder)
-        if trafo_needs_battery:
-            fm.calculate_uv_data_and_slopes()
-        else:
-            fm.calculate_uv_parameters()
-            fm.suitable_for_battery = False
-        result = fm.result()
-        if fm.suitable_for_battery:
-            result.add_battery(BatteryModel(fm).calculate())
+        # errors of single feeders are logged and skipped, so other feeders still get results
+        try:
+            fm = FeederModel(tm, feeder)
+            if trafo_needs_battery:
+                fm.calculate_uv_data_and_slopes()
+            else:
+                fm.calculate_uv_parameters()
+                fm.suitable_for_battery = False
+            result = fm.result()
+            if fm.suitable_for_battery:
+                result.add_battery(BatteryModel(fm).calculate())
+        except Exception:
+            logger.exception("Error processing feeder %s of transformer %s", feeder, trafo_name)
+            continue
         if all_feeders or fm.suitable_for_battery:
             results.append(result)
     return results

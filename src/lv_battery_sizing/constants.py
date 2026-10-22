@@ -1,5 +1,7 @@
 """Physical limits and algorithm parameters."""
 
+import pandas as pd
+
 NOMINAL_VOLTAGE = 230.0  # V, phase-to-neutral
 UNDERVOLTAGE_LIMIT = 207.0  # V, nominal voltage - 10 %
 UNDERVOLTAGE_LIMIT_PU = UNDERVOLTAGE_LIMIT / NOMINAL_VOLTAGE
@@ -18,10 +20,13 @@ MIN_UV_TIMESTAMPS = 4
 MIN_VOLTAGE_DATA_SHARE = 0.6
 
 MEASUREMENT_INTERVAL = "10min"
-INTERVALS_PER_HOUR = 6
+INTERVALS_PER_HOUR = int(pd.Timedelta("1h") / pd.Timedelta(MEASUREMENT_INTERVAL))
 
 # Network model calibration
 INITIAL_TRAFO_LV_KV = 0.425
+# Fitted transformer secondary voltages outside these limits are rejected
+MIN_TRAFO_LV_KV = 0.38
+MAX_TRAFO_LV_KV = 0.45
 CALIBRATION_QUANTILE = 0.005  # quantile of minimal feeder voltages used as calibration limit
 N_CALIBRATION_DATES = 4
 MIN_RES_FACTOR = 0.7
