@@ -30,5 +30,3 @@ MAX_RES_FACTOR = 1.3
 # Battery powers above these are considered unrealistic and set to 0
 MAX_BATTERY_POWER_KW = 100.0
 MAX_BATTERY_POWER_WITH_CHARGING_KW = 150.0
-# Voltage deviation used for missing phases, so that they never limit charging
-MISSING_PHASE_DEVIATION = -5000.0  # V

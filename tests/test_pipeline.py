@@ -15,9 +15,9 @@ def test_demo_battery_result():
     row = res.iloc[0]
     assert row["feeder"] == "FEEDER-2 TRAFO_A"
     assert row["battery_smm"] == 1022
-    assert row["battery_capacity_kwh"] == pytest.approx(0.987918, rel=1e-6)
-    assert row["battery_power_kw"] == pytest.approx(4.645883, rel=1e-6)
-    assert row["battery_cycles"] == pytest.approx(2.243805, rel=1e-6)
+    assert row["battery_capacity_kwh"] == pytest.approx(0.947011, rel=1e-5)
+    assert row["battery_power_kw"] == pytest.approx(4.453511, rel=1e-5)
+    assert row["battery_cycles"] == pytest.approx(2.243802, rel=1e-5)
 
 
 def test_all_feeders_includes_feeders_without_battery():

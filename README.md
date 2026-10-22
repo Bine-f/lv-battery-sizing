@@ -28,7 +28,7 @@ Output on the demo data:
 
 ```
      trafo            feeder  n_undervoltages  n_meters  n_meters_with_uv  n_uv_timestamps  battery_smm  battery_capacity_kwh  battery_power_kw  battery_cycles
-0  TRAFO_A  FEEDER-2 TRAFO_A               18        14                 4                9         1022              0.987918          4.645883        2.243805
+0  TRAFO_A  FEEDER-2 TRAFO_A               18        14                 4                9         1022              0.947011          4.453511        2.243802
 ```
 
 Useful options:

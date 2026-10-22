@@ -7,7 +7,6 @@ from ..constants import (
     INTERVALS_PER_HOUR,
     MAX_BATTERY_POWER_KW,
     MAX_BATTERY_POWER_WITH_CHARGING_KW,
-    MISSING_PHASE_DEVIATION,
     UNDERVOLTAGE_LIMIT,
 )
 from ..preprocess import PHASES
@@ -36,12 +35,11 @@ class BatteryModel:
         self.fix_all_phases = fix_all_phases
         self.battery_df = pd.DataFrame()
 
-    def _phase_powers(self, missing_value: float) -> tuple[pd.DatetimeIndex, np.ndarray]:
+    def _phase_powers(self) -> tuple[pd.DatetimeIndex, np.ndarray]:
         """Power per phase needed at the battery smm to bring every smm to the undervoltage limit.
 
         Returns timestamps and an array of shape (timestamps, smms, phases) in kW,
-        positive values mean undervoltage. Missing measurements get missing_value as voltage
-        deviation.
+        positive values mean undervoltage, missing measurements are NaN.
         """
         data = self.voltage_data.drop_duplicates(["date_time", "smm"]).set_index(
             ["date_time", "smm"]
@@ -52,9 +50,7 @@ class BatteryModel:
                 (
                     UNDERVOLTAGE_LIMIT
                     - data[phase].unstack().reindex(index=timestamps, columns=self.smms)
-                )
-                .fillna(missing_value)
-                .to_numpy()
+                ).to_numpy()
                 for phase in PHASES
             ],
             axis=-1,
@@ -64,16 +60,22 @@ class BatteryModel:
 
     def _needed_power(self, phase_powers: np.ndarray, sign: int) -> np.ndarray:
         """Largest power over smms for every timestamp. sign=1 sums the positive (discharging)
-        powers of the phases, sign=-1 the negative (charging) ones."""
+        powers of the measured phases, sign=-1 the negative (charging) ones.
+
+        Smms without any measurement at a timestamp are ignored. If no smm is measured,
+        discharging power is 0 and charging is not limited (-inf).
+        """
         if self.fix_all_phases:
             per_smm = np.where(sign * phase_powers > 0, phase_powers, 0).sum(axis=-1)
         else:
-            per_smm = phase_powers.sum(axis=-1)
-        return np.nan_to_num(np.nanmax(per_smm, axis=1))
+            per_smm = np.nan_to_num(phase_powers).sum(axis=-1)
+        per_smm[np.isnan(phase_powers).all(axis=-1)] = -np.inf
+        need = per_smm.max(axis=1)
+        return np.where(np.isneginf(need) & (sign > 0), 0.0, need)
 
     def calculate_battery_powers(self) -> None:
         """Battery schedule without recharging: power is only needed at undervoltage timestamps"""
-        timestamps, phase_powers = self._phase_powers(missing_value=0.0)
+        timestamps, phase_powers = self._phase_powers()
         is_uv = timestamps.isin(self.undervoltage_data.date_time.unique())
         need = self._needed_power(phase_powers, sign=1)
         unrealistic = is_uv & (need >= MAX_BATTERY_POWER_KW)
@@ -85,7 +87,7 @@ class BatteryModel:
     def calculate_battery_powers_with_charging(self) -> None:
         """Battery schedule with recharging: after an undervoltage the battery is recharged as
         fast as the voltages allow, the state of charge (kWh, <= 0) is tracked."""
-        timestamps, phase_powers = self._phase_powers(missing_value=MISSING_PHASE_DEVIATION)
+        timestamps, phase_powers = self._phase_powers()
         is_uv = timestamps.isin(self.undervoltage_data.date_time.unique())
         discharge = self._needed_power(phase_powers, sign=1)
         charge = self._needed_power(phase_powers, sign=-1)

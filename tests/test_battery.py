@@ -49,5 +49,14 @@ def test_missing_phases_do_not_limit_charging():
     fm.voltage_data.loc[2, ["u_2", "u_3"]] = np.nan
     bm = BatteryModel(fm)
     bm.calculate()
-    # phase 1 is exactly at the limit, but missing phases make the meter unlimited
+    # phase 1 is exactly at the limit and allows no charging, missing phases are ignored
+    np.testing.assert_allclose(bm.battery_df["battery_power"], [0, 3, 0, -3])
+
+
+def test_timestamps_without_measurements_do_not_limit_charging():
+    fm = feeder([210.0, 204.0, 213.0, 210.0])
+    fm.voltage_data = fm.voltage_data.drop(index=2)
+    fm.voltage_data.loc[2] = [TIMES[2], 1, np.nan, np.nan, np.nan]
+    bm = BatteryModel(fm)
+    bm.calculate()
     np.testing.assert_allclose(bm.battery_df["battery_power"], [0, 3, -3, 0])
